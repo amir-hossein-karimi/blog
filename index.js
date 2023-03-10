@@ -1,6 +1,3 @@
-const express = require("express");
-const app = express();
+const Server = require("./src/server");
 
-app.listen(5000, () => {
-  console.log("app launched");
-});
+new Server();
