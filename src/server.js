@@ -1,7 +1,15 @@
+const path = require("path");
+
 const express = require("express");
 const app = express();
-const path = require("path");
-const { SERVER_PORT } = require("./constants");
+
+const { StatusCodes, ReasonPhrases } = require("http-status-codes");
+const mongoose = require("mongoose");
+const morgan = require("morgan");
+const swaggerUi = require("swagger-ui-express");
+const swaggerJs = require("swagger-jsdoc");
+
+const { SERVER_PORT, DB_URL } = require("./constants");
 const baseRoutes = require("./routes");
 
 class Server {
@@ -15,7 +23,7 @@ class Server {
   }
 
   configApp() {
-    // app.use(morgan("dev"));
+    app.use(morgan("dev"));
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(express.static(path.join(__dirname, "..", "public")));
@@ -33,16 +41,16 @@ class Server {
 
   configErrors() {
     app.use((req, res, next) => {
-      res.status(400).send({
+      res.status(StatusCodes.NOT_FOUND).send({
         success: false,
-        statusCode: 400,
-        message: "route not found",
+        statusCode: StatusCodes.NOT_FOUND,
+        message: ReasonPhrases.NOT_FOUND,
       });
     });
 
     app.use((error, req, res, next) => {
-      const statusCode = error.StatusCode || 500;
-      const errorMessage = error.message || "internal server error";
+      const statusCode = error.StatusCode || StatusCodes.INTERNAL_SERVER_ERROR;
+      const errorMessage = error.message || ReasonPhrases.INTERNAL_SERVER_ERROR;
       res.status(statusCode).send({
         success: false,
         statusCode: statusCode,
@@ -51,9 +59,46 @@ class Server {
     });
   }
 
-  configDataBase() {}
+  configDataBase() {
+    mongoose
+      .connect(DB_URL)
+      .then(() => {
+        console.log("mongoose connect successfully");
+      })
+      .catch((e) => {
+        console.log("mongoose connection failed by: ", e);
+      });
 
-  configSwagger() {}
+    require("./config/redis");
+  }
+
+  configSwagger() {
+    app.use(
+      "/apis",
+      swaggerUi.serve,
+      swaggerUi.setup(
+        swaggerJs({
+          swaggerDefinition: {
+            openapi: "3.0.0",
+            info: {
+              title: "this is a simple blog",
+              description: "this blog created using express and mongodb",
+              version: "1.0.0",
+            },
+            servers: [
+              {
+                url: "http://localhost:8000",
+              },
+            ],
+          },
+          apis: [`${__dirname}/swagger/**/*.js`],
+        }),
+        {
+          explorer: true,
+        }
+      )
+    );
+  }
 }
 
 module.exports = Server;
